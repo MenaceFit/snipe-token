@@ -1,0 +1,301 @@
+# ============================================================
+# SNIPE-TOKEN — Main Configuration
+# ============================================================
+
+# ---- Chain Configuration ----
+chains:
+  ethereum:
+    enabled: true
+    chain_id: 1
+    name: "Ethereum"
+    symbol: "ETH"
+    decimals: 18
+    explorer: "https://etherscan.io"
+    native_token: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE"
+    stablecoins:
+      - "0xdAC17F958D2ee523a2206206994597C13D831ec7"  # USDT
+      - "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"  # USDC
+      - "0x6B175474E89094C44Da98b954EedeAC495271d0F"  # DAI
+    wrapped_native: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"  # WETH
+    dexes:
+      - uniswap_v2
+      - uniswap_v3
+      - curve
+      - balancer_v2
+      - sushiswap_v2
+
+  base:
+    enabled: true
+    chain_id: 8453
+    name: "Base"
+    symbol: "ETH"
+    decimals: 18
+    explorer: "https://basescan.org"
+    native_token: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE"
+    stablecoins:
+      - "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"  # USDC
+      - "0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb"  # DAI
+      - "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2"  # USDT
+    wrapped_native: "0x4200000000000000000000000000000000000006"  # WETH
+    dexes:
+      - uniswap_v2
+      - uniswap_v3
+      - aerodrome
+      - baseswap
+
+  arbitrum:
+    enabled: true
+    chain_id: 42161
+    name: "Arbitrum"
+    symbol: "ETH"
+    decimals: 18
+    explorer: "https://arbiscan.io"
+    native_token: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE"
+    stablecoins:
+      - "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9"  # USDT
+      - "0xaf88d065e77c8cC2239327C5EDb3A432268e5831"  # USDC
+      - "0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8"  # USDC.e
+    wrapped_native: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1"  # WETH
+    dexes:
+      - uniswap_v3
+      - camelot
+      - sushiswap_v2
+
+  bsc:
+    enabled: true
+    chain_id: 56
+    name: "BNB Chain"
+    symbol: "BNB"
+    decimals: 18
+    explorer: "https://bscscan.com"
+    native_token: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE"
+    stablecoins:
+      - "0x55d398326f99059fF775485246999027B3197955"  # USDT
+      - "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d"  # USDC
+      - "0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56"  # BUSD
+    wrapped_native: "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c"  # WBNB
+    dexes:
+      - pancakeswap_v2
+      - pancakeswap_v3
+      - biswap
+
+  polygon:
+    enabled: true
+    chain_id: 137
+    name: "Polygon"
+    symbol: "MATIC"
+    decimals: 18
+    explorer: "https://polygonscan.com"
+    native_token: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE"
+    stablecoins:
+      - "0xc2132D05D31c914a87C6611C10748AEb04B58e8F"  # USDT
+      - "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"  # USDC
+      - "0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063"  # DAI
+    wrapped_native: "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270"  # WMATIC
+    dexes:
+      - uniswap_v3
+      - quickswap_v2
+      - sushiswap_v2
+
+  optimism:
+    enabled: true
+    chain_id: 10
+    name: "Optimism"
+    symbol: "ETH"
+    decimals: 18
+    explorer: "https://optimistic.etherscan.io"
+    native_token: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE"
+    stablecoins:
+      - "0x94b008aA00579c1307B0EF2c499aD98a8ce58e58"  # USDT
+      - "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85"  # USDC
+      - "0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1"  # DAI
+    wrapped_native: "0x4200000000000000000000000000000000000006"  # WETH
+    dexes:
+      - uniswap_v3
+      - velodrome
+
+  avalanche:
+    enabled: true
+    chain_id: 43114
+    name: "Avalanche"
+    symbol: "AVAX"
+    decimals: 18
+    explorer: "https://snowscan.xyz"
+    native_token: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE"
+    stablecoins:
+      - "0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7"  # USDT
+      - "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E"  # USDC
+    wrapped_native: "0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7"  # WAVAX
+    dexes:
+      - traderjoe_v2
+      - pangolin
+
+  solana:
+    enabled: true
+    chain_id: 101
+    name: "Solana"
+    symbol: "SOL"
+    decimals: 9
+    explorer: "https://solscan.io"
+    native_token: "So11111111111111111111111111111111111111112"
+    stablecoins:
+      - "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"  # USDC
+      - "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB"  # USDT
+    dexes:
+      - raydium
+      - jupiter
+      - orca
+      - meteora
+
+  # Priority 2
+  blast:
+    enabled: false
+    chain_id: 81457
+    name: "Blast"
+    symbol: "ETH"
+    decimals: 18
+    explorer: "https://blastscan.io"
+
+  linea:
+    enabled: false
+    chain_id: 59144
+    name: "Linea"
+    symbol: "ETH"
+    decimals: 18
+    explorer: "https://lineascan.build"
+
+  zksync:
+    enabled: false
+    chain_id: 324
+    name: "zkSync"
+    symbol: "ETH"
+    decimals: 18
+    explorer: "https://explorer.zksync.io"
+
+  scroll:
+    enabled: false
+    chain_id: 534352
+    name: "Scroll"
+    symbol: "ETH"
+    decimals: 18
+    explorer: "https://scrollscan.com"
+
+# ---- Wallet Groups ----
+wallet_groups:
+  - name: "SMART MONEY"
+    emoji: "🔥"
+  - name: "WHALE WATCH"
+    emoji: "🐋"
+  - name: "DEGEN"
+    emoji: "🎰"
+  - name: "INSIDER WATCH"
+    emoji: "👁️"
+
+# ---- Trade Detection ----
+trade_detection:
+  min_usd_value: 10          # Ignore trades below this USD value
+  stablecoin_threshold: 0.99  # Price ratio to consider a token a stablecoin
+  max_price_age_seconds: 30   # Max age of cached price
+  classify_unknown: true      # Create UNKNOWN trades when uncertain
+
+# ---- Position Engine ----
+position_engine:
+  cost_method: "average_cost"  # average_cost | fifo
+  include_gas_in_cost: true
+  include_fees_in_cost: true
+  dust_threshold_usd: 1        # Positions smaller than this are considered dust
+
+# ---- PnL Engine ----
+pnl_engine:
+  update_unrealized_interval: 60   # seconds
+  price_sources:
+    - dexscreener
+    - birdeye
+    - coingecko
+  fallback_on_price_failure: true
+
+# ---- Telegram ----
+telegram:
+  max_message_length: 4096
+  position_update_cooldown: 300      # seconds between updates for same position
+  position_update_min_change: 5.0    # % change required to trigger update
+  alert_queue_max_size: 1000
+  max_retries: 3
+  retry_delay: 5
+
+# ---- Copy Trading ----
+copy_trading:
+  paper:
+    enabled: true
+    default_amount_usd: 100
+    auto_follow_score_threshold: 85
+  live:
+    enabled: false   # Must be explicitly enabled
+    emergency_stop: false
+    defaults:
+      max_trade_size_usd: 100
+      max_daily_loss_usd: 500
+      max_position_size_usd: 200
+      copy_percent: 5
+      max_slippage_bps: 300
+      max_gas_gwei: 100
+      min_liquidity_usd: 50000
+      min_market_cap_usd: 500000
+      max_token_age_days: null      # null = no restriction
+      require_lock: false
+
+# ---- Smart Money Score ----
+smart_money:
+  min_trades_for_score: 10
+  min_trades_for_high_confidence: 50
+  score_weights:
+    win_rate: 0.25
+    average_roi: 0.25
+    consistency: 0.15
+    risk_management: 0.15
+    trade_frequency: 0.10
+    drawdown: 0.10
+  cluster_detection:
+    enabled: true
+    time_window_minutes: 5
+    min_shared_tokens: 3
+    min_confidence: 0.7
+
+# ---- Risk Engine ----
+risk:
+  max_buy_tax_percent: 10
+  max_sell_tax_percent: 10
+  min_liquidity_usd: 10000
+  max_top_holder_percent: 50
+  check_honeypot: true
+  check_contract_source: true
+  simulate_trade: true
+  block_unverified_contracts: false   # true = only trade verified contracts
+
+# ---- Monitoring ----
+monitoring:
+  latency_warning_ms: 1000
+  latency_critical_ms: 5000
+  websocket_reconnect_delay: 1    # seconds, exponential backoff base
+  websocket_max_reconnect_delay: 60
+  rpc_timeout: 10
+  rpc_max_retries: 3
+  health_check_interval: 30
+
+# ---- Analytics ----
+analytics:
+  ranking_update_interval: 3600   # seconds
+  consensus_min_wallets: 2
+  consensus_time_window: 3600     # seconds, window to detect consensus buys
+  top_trades_min_roi: 50          # % minimum ROI for top trades feed
+  top_trades_min_usd: 100         # Minimum investment for top trades feed
+
+# ---- Performance ----
+performance:
+  max_concurrent_chains: 10
+  max_concurrent_wallet_subscriptions: 500
+  event_queue_size: 10000
+  worker_concurrency: 10
+  db_pool_size: 20
+  db_max_overflow: 40
+  redis_pool_size: 20
