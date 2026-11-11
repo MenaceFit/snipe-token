@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import signal
+import sys
 from typing import Optional
 
 import redis.asyncio as aioredis
@@ -185,31 +186,43 @@ async def main() -> None:
         logger.info("Shutdown signal received")
         shutdown_event.set()
 
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, _handle_signal)
+    if sys.platform != "win32":
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            loop.add_signal_handler(sig, _handle_signal)
+    else:
+        # Windows: add_signal_handler not supported, use signal.signal instead
+        signal.signal(signal.SIGINT, lambda s, f: shutdown_event.set())
+        signal.signal(signal.SIGTERM, lambda s, f: shutdown_event.set())
 
     # Start Telegram bot (background task)
     bot_task: Optional[asyncio.Task] = None
     if bot:
         bot_task = asyncio.create_task(bot.run_polling())
 
-    # Start FastAPI
-    config = uvicorn.Config(
-        "api.main:app",
-        host=settings.api_host,
-        port=settings.api_port,
-        log_level="warning",
-        loop="none",
-    )
-    server = uvicorn.Server(config)
-    api_task = asyncio.create_task(server.serve())
+    # Start FastAPI (optional — skipped if api module unavailable)
+    server = None
+    api_task = None
+    try:
+        config = uvicorn.Config(
+            "api.main:app",
+            host=settings.api_host,
+            port=settings.api_port,
+            log_level="warning",
+            loop="none",
+        )
+        server = uvicorn.Server(config)
+        api_task = asyncio.create_task(server.serve())
+        logger.info("API running on %s:%d", settings.api_host, settings.api_port)
+    except Exception as e:
+        logger.warning("API disabled: %s", e)
 
-    logger.info("All services running — API on %s:%d", settings.api_host, settings.api_port)
+    logger.info("Bot running — waiting for shutdown signal")
 
     await shutdown_event.wait()
     logger.info("Shutting down...")
 
-    server.should_exit = True
+    if server:
+        server.should_exit = True
     await scheduler.stop()
     if bot_task:
         bot_task.cancel()
@@ -217,7 +230,8 @@ async def main() -> None:
             await bot_task
         except asyncio.CancelledError:
             pass
-    await asyncio.gather(api_task, return_exceptions=True)
+    if api_task:
+        await asyncio.gather(api_task, return_exceptions=True)
     await redis.aclose()
 
     logger.info("Shutdown complete")

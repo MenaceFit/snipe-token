@@ -116,7 +116,7 @@ async def main() -> None:
     await run_migrations()
 
     _print("🚀 Démarrage du bot...", "bold cyan")
-    _print()
+    _print("", "")
 
     restart_count = 0
     while restart_count <= MAX_RESTARTS:
