@@ -539,7 +539,7 @@ def format_trade_history(
     return "\n".join(lines)
 
 
-# ─── Chain activity ────────────────────────────────────────────────────────────
+# ─── Chain activity ───────────────────────────────────────────────────────────
 
 def format_chain_activity(stats: dict) -> str:
     if not stats:
@@ -558,5 +558,114 @@ def format_chain_activity(stats: dict) -> str:
             f"<code>{bar}</code> <b>{chain.upper()}</b>  "
             f"📊{tx}tx  💰${format_number(vol)}"
         )
+
+    return "\n".join(lines)
+
+
+# ─── Open positions panel ──────────────────────────────────────────────────────
+
+def format_open_positions(positions: list[dict]) -> str:
+    if not positions:
+        return "📈 <b>POSITIONS OUVERTES</b>\n\n<i>Aucune position ouverte.</i>"
+
+    total_invested = sum(p.get("invested", 0) for p in positions)
+    total_current = sum(p.get("current_value", p.get("invested", 0)) for p in positions)
+    total_pnl = total_current - total_invested
+    total_roi = (total_pnl / total_invested * 100) if total_invested > 0 else 0
+
+    roi_em = "🚀" if total_roi > 20 else ("📈" if total_roi > 0 else "📉")
+    pnl_sign = "+" if total_pnl >= 0 else ""
+
+    lines = [
+        f"📈 <b>POSITIONS OUVERTES</b>  ({len(positions)})",
+        f"Capital: <b>${format_number(total_invested)}</b>  "
+        f"PnL: <b>{pnl_sign}${format_number(abs(total_pnl))}</b> {roi_em}",
+        "─" * 28,
+    ]
+
+    for p in positions[:15]:
+        sym = p.get("token_symbol", "???")
+        chain = p.get("chain", "")
+        roi = p.get("roi") or 0
+        invested = p.get("invested", 0)
+        wallet = p.get("wallet_label", "")
+
+        roi_sign = "+" if roi >= 0 else ""
+        bar_val = max(0, min(int(roi) + 100, 200))
+        bar = format_progress_bar(bar_val, 200, 6)
+
+        em = "🚀" if roi > 100 else ("📈" if roi > 0 else "📉")
+        lines.append(
+            f"{em} <b>{sym}</b> <code>{chain}</code>  {roi_sign}{roi:.0f}%\n"
+            f"   <code>{bar}</code>  ${format_number(invested)}"
+            + (f"  · {wallet}" if wallet else "")
+        )
+
+    return "\n".join(lines)
+
+
+# ─── Daily summary ─────────────────────────────────────────────────────────────
+
+def format_daily_summary(stats: dict) -> str:
+    trades_today = stats.get("trades_today", 0)
+    buys = stats.get("buys", 0)
+    sells = stats.get("sells", 0)
+    pnl = stats.get("realized_pnl", 0)
+    win_rate = stats.get("win_rate", 0)
+    best_token = stats.get("best_token", "")
+    best_roi = stats.get("best_roi", 0)
+    top_chain = stats.get("top_chain", "")
+    wallets_active = stats.get("wallets_active", 0)
+
+    pnl_sign = "+" if pnl >= 0 else ""
+    pnl_em = "💚" if pnl >= 0 else "🔴"
+    wr_bar = format_progress_bar(int(win_rate), 100, 8)
+
+    lines = [
+        "📅 <b>RÉSUMÉ DU JOUR</b>",
+        "",
+        f"📊 Trades: <b>{trades_today}</b>  (🟢{buys} achats / 🔴{sells} ventes)",
+        f"💰 PnL réalisé: {pnl_em} <b>{pnl_sign}${format_number(abs(pnl))}</b>",
+        f"🏆 Win rate: <b>{win_rate:.0f}%</b>  <code>{wr_bar}</code>",
+    ]
+
+    if best_token and best_roi:
+        lines.append(f"🥇 Meilleur trade: <b>{best_token}</b> +{best_roi:.0f}%")
+    if top_chain:
+        lines.append(f"⛓️ Chain la plus active: <b>{top_chain.upper()}</b>")
+    if wallets_active:
+        lines.append(f"👛 Wallets actifs: <b>{wallets_active}</b>")
+
+    return "\n".join(lines)
+
+
+# ─── Safety alert ──────────────────────────────────────────────────────────────
+
+def format_safety_alert(token_symbol: str, chain_name: str, safety: dict) -> str:
+    risk = safety.get("risk_level", "UNKNOWN")
+    risk_em = {"CRITICAL": "🔴", "HIGH": "🟠", "MEDIUM": "🟡", "LOW": "🟢"}.get(risk, "⚪")
+    flags = safety.get("flags", [])
+
+    lines = [
+        f"🔐 <b>ALERTE SÉCURITÉ — {token_symbol}</b>",
+        f"Chain: <b>{chain_name}</b>  Risque: {risk_em} <b>{risk}</b>",
+    ]
+
+    bt = safety.get("buy_tax")
+    st = safety.get("sell_tax")
+    if bt is not None or st is not None:
+        buy_str = f"{bt:.1f}%" if bt is not None else "?"
+        sell_str = f"{st:.1f}%" if st is not None else "?"
+        lines.append(f"Tax: Buy {buy_str} / Sell {sell_str}")
+
+    if flags:
+        lines.append("")
+        lines.append("<b>Flags détectés:</b>")
+        for f in flags[:6]:
+            lines.append(f"  {f}")
+
+    if safety.get("is_honeypot"):
+        lines.append("")
+        lines.append("⛔ <b>HONEYPOT DÉTECTÉ — NE PAS TRADER</b>")
 
     return "\n".join(lines)

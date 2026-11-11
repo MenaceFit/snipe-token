@@ -18,6 +18,10 @@ def main_menu_keyboard(wallet_count: int = 0) -> InlineKeyboardMarkup:
             InlineKeyboardButton("🔥 Hotlist", callback_data="menu:hotlist"),
         ],
         [
+            InlineKeyboardButton("📈 Positions", callback_data="menu:positions"),
+            InlineKeyboardButton("👁️ Watchlist", callback_data="menu:watchlist"),
+        ],
+        [
             InlineKeyboardButton("🏆 Classement", callback_data="menu:ranking"),
             InlineKeyboardButton("🤝 Consensus", callback_data="menu:consensus"),
         ],
@@ -369,6 +373,90 @@ def cancel_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("❌ Annuler", callback_data="menu:main")]
     ])
 
+
+# ─── OPEN POSITIONS ──────────────────────────────────────────────────────────
+
+def open_positions_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("🔄 Rafraîchir", callback_data="positions:refresh"),
+            InlineKeyboardButton("📤 Exporter CSV", callback_data="export:positions:csv"),
+        ],
+        [InlineKeyboardButton("◀️ Menu", callback_data="menu:main")],
+    ])
+
+
+# ─── WATCHLIST ────────────────────────────────────────────────────────────────
+
+def watchlist_keyboard(tokens: list[dict] | None = None) -> InlineKeyboardMarkup:
+    buttons = []
+    for t in (tokens or [])[:6]:
+        sym = t.get("symbol", "???")
+        chain = t.get("chain", "")
+        addr = t.get("address", "")
+        buttons.append([
+            InlineKeyboardButton(
+                f"🔍 {sym} ({chain.upper()})",
+                callback_data=f"watchlist:detail:{chain}:{addr}",
+            ),
+            InlineKeyboardButton("🗑", callback_data=f"watchlist:remove:{chain}:{addr}"),
+        ])
+    buttons.append([
+        InlineKeyboardButton("➕ Ajouter token", callback_data="watchlist:add"),
+        InlineKeyboardButton("◀️ Menu", callback_data="menu:main"),
+    ])
+    return InlineKeyboardMarkup(buttons)
+
+
+# ─── EXPORT ───────────────────────────────────────────────────────────────────
+
+def export_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("📅 7 jours", callback_data="export:trades:7d"),
+            InlineKeyboardButton("📅 30 jours", callback_data="export:trades:30d"),
+        ],
+        [
+            InlineKeyboardButton("📈 Positions", callback_data="export:positions:csv"),
+            InlineKeyboardButton("💼 Portfolio", callback_data="export:portfolio:csv"),
+        ],
+        [InlineKeyboardButton("◀️ Retour", callback_data="menu:main")],
+    ])
+
+
+# ─── BUY ALERT (with quick-add) ──────────────────────────────────────────────
+
+def buy_alert_with_quickadd_keyboard(
+    tx_hash: str,
+    token_address: str,
+    wallet_address: str,
+    chain_key: str,
+    explorer_url: str,
+    dexscreener_slug: str,
+) -> InlineKeyboardMarkup:
+    from src.telegram.keyboards import trade_alert_keyboard  # avoid circular
+    base = trade_alert_keyboard(
+        tx_hash=tx_hash,
+        token_address=token_address,
+        wallet_address=wallet_address,
+        chain_key=chain_key,
+        explorer_url=explorer_url,
+        dexscreener_slug=dexscreener_slug,
+    )
+    # Inject quick-add row at top
+    quick_row = [
+        InlineKeyboardButton(
+            "👁️ Watch token", callback_data=f"watchlist:quickadd:{chain_key}:{token_address}"
+        ),
+        InlineKeyboardButton(
+            "🚫 Ignorer token", callback_data=f"ignore_token:{chain_key}:{token_address}"
+        ),
+    ]
+    rows = [quick_row] + list(base.inline_keyboard)
+    return InlineKeyboardMarkup(rows)
+
+
+# ─── Legacy alias ─────────────────────────────────────────────────────────────
 
 # Legacy alias
 def chain_filter_keyboard(selected: str = "") -> InlineKeyboardMarkup:

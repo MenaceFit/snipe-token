@@ -15,8 +15,10 @@ from telegram.ext import ContextTypes
 
 from src.telegram.alerts import (
     format_chain_activity,
+    format_daily_summary,
     format_hotlist,
     format_number,
+    format_open_positions,
     format_portfolio_summary,
     format_ranking,
     format_trade_history,
@@ -30,14 +32,17 @@ from src.telegram.keyboards import (
     chain_selection_keyboard,
     confirm_keyboard,
     discover_keyboard,
+    export_keyboard,
     hotlist_keyboard,
     main_menu_keyboard,
+    open_positions_keyboard,
     portfolio_keyboard,
     ranking_keyboard,
     settings_keyboard,
     trade_history_keyboard,
     wallet_detail_keyboard,
     wallets_list_keyboard,
+    watchlist_keyboard,
 )
 
 if TYPE_CHECKING:
@@ -719,7 +724,12 @@ async def show_help(
         "🐋 ≥$100K  🦈 ≥$25K  🐬 ≥$5K  🐟 ≥$1K  🦐 &lt;$1K\n"
         "▓▓▓▓░░░░ Score / Progression\n\n"
         "<b>Smart Money Score (0-100) :</b>\n"
-        "Win rate · ROI moyen · Régularité · Risque"
+        "Win rate · ROI moyen · Régularité · Risque\n\n"
+        "<b>Nouvelles commandes :</b>\n"
+        "/positions — Positions ouvertes\n"
+        "/watchlist — Tokens favoris\n"
+        "/export — Exporter trades CSV\n"
+        "/daily — Résumé du jour"
     )
     kb = back_keyboard("menu:main")
     if edit and update.callback_query:
@@ -782,6 +792,221 @@ async def handle_chain_confirm(
         parse_mode=ParseMode.HTML,
         reply_markup=cancel_keyboard(),
     )
+
+
+# ─── Open positions view ───────────────────────
+
+async def show_open_positions(
+    bot: "SnipeBot",
+    update: Update,
+    edit: bool = False,
+) -> None:
+    positions = await bot.get_positions()
+    text = format_open_positions(positions)
+    kb = open_positions_keyboard()
+    if edit and update.callback_query:
+        await update.callback_query.edit_message_text(text, parse_mode=ParseMode.HTML, reply_markup=kb)
+    else:
+        msg = update.message or (update.callback_query and update.callback_query.message)
+        if msg:
+            await msg.reply_html(text, reply_markup=kb)
+
+
+# ─── Watchlist view ────────────────────────────
+
+_WATCHLIST_KEY = "watchlist:{chat_id}"
+
+
+async def _get_watchlist(bot: "SnipeBot", chat_id: int) -> list[dict]:
+    import json as _json
+    raw = await bot._redis.get(_WATCHLIST_KEY.format(chat_id=chat_id))
+    if not raw:
+        return []
+    try:
+        return _json.loads(raw)
+    except Exception:
+        return []
+
+
+async def _save_watchlist(bot: "SnipeBot", chat_id: int, tokens: list[dict]) -> None:
+    import json as _json
+    await bot._redis.setex(
+        _WATCHLIST_KEY.format(chat_id=chat_id),
+        86400 * 90,
+        _json.dumps(tokens),
+    )
+
+
+async def show_watchlist(
+    bot: "SnipeBot",
+    update: Update,
+    edit: bool = False,
+) -> None:
+    chat_id = update.effective_chat.id
+    tokens = await _get_watchlist(bot, chat_id)
+    if tokens:
+        lines = ["👁️ <b>WATCHLIST</b>\n"]
+        for t in tokens[:20]:
+            sym = t.get("symbol", "???")
+            chain = t.get("chain", "")
+            lines.append(f"• <b>{sym}</b> <code>{chain.upper()}</code>")
+        text = "\n".join(lines)
+    else:
+        text = "👁️ <b>WATCHLIST</b>\n\n<i>Aucun token. Clique 'Watch token' dans une alerte BUY.</i>"
+    kb = watchlist_keyboard(tokens)
+    if edit and update.callback_query:
+        await update.callback_query.edit_message_text(text, parse_mode=ParseMode.HTML, reply_markup=kb)
+    else:
+        msg = update.message or (update.callback_query and update.callback_query.message)
+        if msg:
+            await msg.reply_html(text, reply_markup=kb)
+
+
+async def handle_watchlist_quickadd(
+    bot: "SnipeBot",
+    update: Update,
+    chain_key: str,
+    token_address: str,
+) -> None:
+    chat_id = update.effective_chat.id
+    tokens = await _get_watchlist(bot, chat_id)
+    already = any(t.get("address") == token_address for t in tokens)
+    if already:
+        await update.callback_query.answer("Déjà dans la watchlist !", show_alert=False)
+        return
+    tokens.append({"address": token_address, "chain": chain_key, "symbol": token_address[:8]})
+    await _save_watchlist(bot, chat_id, tokens)
+    await update.callback_query.answer("👁️ Token ajouté à la watchlist !", show_alert=False)
+
+
+async def handle_watchlist_remove(
+    bot: "SnipeBot",
+    update: Update,
+    chain_key: str,
+    token_address: str,
+) -> None:
+    chat_id = update.effective_chat.id
+    tokens = await _get_watchlist(bot, chat_id)
+    tokens = [t for t in tokens if t.get("address") != token_address]
+    await _save_watchlist(bot, chat_id, tokens)
+    await show_watchlist(bot, update, edit=True)
+
+
+# ─── CSV export ────────────────────────────────
+
+async def handle_export_csv(
+    bot: "SnipeBot",
+    update: Update,
+    period: str = "30d",
+) -> None:
+    import csv
+    import io
+    from datetime import datetime, timedelta, timezone
+
+    days = 7 if period == "7d" else 30
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+
+    wallets = await bot.list_wallets()
+    all_trades = []
+    for w in wallets:
+        trades = await bot.get_trade_history(w["address"], limit=200)
+        for t in trades:
+            ts = t.get("timestamp")
+            if ts and hasattr(ts, "replace"):
+                if ts.replace(tzinfo=timezone.utc) < cutoff:
+                    continue
+            t["wallet"] = w["label"]
+            all_trades.append(t)
+
+    if not all_trades:
+        await update.callback_query.answer("Aucun trade sur cette période.", show_alert=True)
+        return
+
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=["wallet", "side", "token_symbol", "chain", "roi_percent", "value_usd", "timestamp"])
+    writer.writeheader()
+    for t in all_trades:
+        writer.writerow({
+            "wallet": t.get("wallet", ""),
+            "side": t.get("side", ""),
+            "token_symbol": t.get("token_symbol", ""),
+            "chain": t.get("chain", ""),
+            "roi_percent": t.get("roi_percent", ""),
+            "value_usd": t.get("value_usd", ""),
+            "timestamp": str(t.get("timestamp", "")),
+        })
+
+    csv_bytes = buf.getvalue().encode("utf-8")
+    filename = f"trades_{period}_{datetime.now().strftime('%Y%m%d')}.csv"
+
+    msg = update.callback_query.message
+    await msg.reply_document(
+        document=io.BytesIO(csv_bytes),
+        filename=filename,
+        caption=f"📤 Export trades — {period} ({len(all_trades)} trades)",
+    )
+    await update.callback_query.answer()
+
+
+# ─── Daily summary view ────────────────────────
+
+async def show_daily_summary(
+    bot: "SnipeBot",
+    update: Update,
+) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+    wallets = await bot.list_wallets()
+    trades_today, buys, sells = 0, 0, 0
+    pnl_total = 0.0
+    best_token, best_roi = "", 0.0
+    chains: dict[str, int] = {}
+    wallets_active = set()
+
+    for w in wallets:
+        history = await bot.get_trade_history(w["address"], limit=100)
+        for t in history:
+            ts = t.get("timestamp")
+            if ts and hasattr(ts, "replace"):
+                if ts.replace(tzinfo=timezone.utc) < cutoff:
+                    continue
+            trades_today += 1
+            wallets_active.add(w["address"])
+            side = t.get("side", "BUY")
+            if side == "BUY":
+                buys += 1
+            else:
+                sells += 1
+                roi = t.get("roi_percent") or 0
+                pnl_total += (t.get("value_usd") or 0) * roi / 100
+                if roi > best_roi:
+                    best_roi = roi
+                    best_token = t.get("token_symbol", "")
+            chain = t.get("chain", "")
+            chains[chain] = chains.get(chain, 0) + 1
+
+    top_chain = max(chains, key=chains.get) if chains else ""
+    wins = sum(1 for w2 in wallets for t in [] if (t.get("roi_percent") or 0) > 0)
+    win_rate = (wins / max(sells, 1)) * 100 if sells > 0 else 0
+
+    stats = {
+        "trades_today": trades_today,
+        "buys": buys,
+        "sells": sells,
+        "realized_pnl": pnl_total,
+        "win_rate": win_rate,
+        "best_token": best_token,
+        "best_roi": best_roi,
+        "top_chain": top_chain,
+        "wallets_active": len(wallets_active),
+    }
+
+    from src.telegram.alerts import format_daily_summary
+    text = format_daily_summary(stats)
+    msg = update.message or (update.callback_query and update.callback_query.message)
+    if msg:
+        await msg.reply_html(text, reply_markup=back_keyboard("menu:main"))
 
 
 # ─── Helper ────────────────────────────────────

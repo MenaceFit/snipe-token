@@ -63,21 +63,27 @@ from src.telegram.menus import (
     get_state,
     handle_chain_confirm,
     handle_chain_toggle,
+    handle_watchlist_quickadd,
+    handle_watchlist_remove,
     set_state,
     show_add_wallet_prompt,
     show_alert_filters_view,
     show_analytics,
     show_consensus,
+    show_daily_summary,
     show_discover,
     show_help,
     show_hotlist,
     show_main_menu,
+    show_open_positions,
     show_portfolio,
     show_ranking,
     show_settings,
     show_trade_history_view,
     show_wallet_detail,
     show_wallets_menu,
+    show_watchlist,
+    handle_export_csv,
 )
 
 logger = logging.getLogger(__name__)
@@ -94,6 +100,9 @@ def _user_settings_key(chat_id: int) -> str:
 
 def _alerts_muted_key(chat_id: int) -> str:
     return f"tg:alerts_muted:{chat_id}"
+
+def _trade_alert_cooldown_key(wallet: str, token: str) -> str:
+    return f"alert:cooldown:{wallet[:20]}:{token[:20]}"
 
 
 class SnipeBot:
@@ -146,6 +155,9 @@ class SnipeBot:
         app.add_handler(CommandHandler("settings", self._cmd_settings))
         app.add_handler(CommandHandler("backtest", self._cmd_backtest))
         app.add_handler(CommandHandler("toptrades", self._cmd_toptrades))
+        app.add_handler(CommandHandler("watchlist", self._cmd_watchlist))
+        app.add_handler(CommandHandler("export", self._cmd_export))
+        app.add_handler(CommandHandler("daily", self._cmd_daily))
 
         # Text messages (address input, label input, etc.)
         app.add_handler(
@@ -296,6 +308,27 @@ class SnipeBot:
     async def _cmd_hotlist(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await show_hotlist(self, update)
 
+    async def _cmd_watchlist(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        await show_watchlist(self, update)
+
+    async def _cmd_export(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        from src.telegram.keyboards import export_keyboard
+        await update.message.reply_html(
+            "📤 <b>Export de données</b>\n\nChoisir la période :",
+            reply_markup=export_keyboard(),
+        )
+
+    async def _cmd_daily(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        await show_daily_summary(self, update)
+
+    async def _is_alert_on_cooldown(self, wallet_address: str, token_address: str) -> bool:
+        key = _trade_alert_cooldown_key(wallet_address, token_address)
+        exists = await self._redis.exists(key)
+        if exists:
+            return True
+        await self._redis.setex(key, _COOLDOWN_SECONDS, "1")
+        return False
+
     # ── Text message router ────────────────────────────
 
     async def _handle_text(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -345,6 +378,58 @@ class SnipeBot:
 
         elif data == "menu:discover":
             await show_discover(self, update, edit=True)
+
+        elif data == "menu:positions":
+            await show_open_positions(self, update, edit=True)
+
+        elif data == "menu:watchlist":
+            await show_watchlist(self, update, edit=True)
+
+        elif data == "positions:refresh":
+            await show_open_positions(self, update, edit=True)
+
+        # Watchlist actions
+        elif data.startswith("watchlist:quickadd:"):
+            parts = data.split(":", 3)
+            chain_key = parts[2] if len(parts) > 2 else ""
+            token_addr = parts[3] if len(parts) > 3 else ""
+            await handle_watchlist_quickadd(self, update, chain_key, token_addr)
+
+        elif data.startswith("watchlist:remove:"):
+            parts = data.split(":", 3)
+            chain_key = parts[2] if len(parts) > 2 else ""
+            token_addr = parts[3] if len(parts) > 3 else ""
+            await handle_watchlist_remove(self, update, chain_key, token_addr)
+
+        # Export
+        elif data.startswith("export:trades:"):
+            period = data.split(":")[2]
+            await handle_export_csv(self, update, period=period)
+
+        elif data.startswith("export:positions:csv"):
+            positions = await self.get_positions()
+            if not positions:
+                await query.answer("Aucune position ouverte.", show_alert=True)
+                return
+            import csv, io
+            buf = io.StringIO()
+            writer = csv.DictWriter(buf, fieldnames=["token_symbol", "chain", "roi", "invested"])
+            writer.writeheader()
+            for p in positions:
+                writer.writerow({
+                    "token_symbol": p.get("token_symbol", ""),
+                    "chain": p.get("chain", ""),
+                    "roi": p.get("roi", ""),
+                    "invested": p.get("invested", ""),
+                })
+            csv_bytes = buf.getvalue().encode("utf-8")
+            msg = query.message
+            await msg.reply_document(
+                document=io.BytesIO(csv_bytes),
+                filename="positions.csv",
+                caption=f"📤 Export positions ({len(positions)} positions)",
+            )
+            await query.answer()
 
         # Wallet pagination
         elif data.startswith("wallets:page:"):
@@ -692,6 +777,10 @@ class SnipeBot:
         latency_ms = alert_data["latency_ms"]
         realized_pnl = alert_data["realized_pnl"]
 
+        # Per-wallet+token cooldown (5 min)
+        if await self._is_alert_on_cooldown(wallet.address, token.address):
+            return
+
         label = wallet.label or wallet.address[:12]
         chain_key = chain.chain_key
         chain_name = chain.name
@@ -700,6 +789,20 @@ class SnipeBot:
 
         # Get wallet score for context
         score = getattr(wallet, "smart_money_score", None)
+
+        # Safety check on BUY (non-blocking, best-effort)
+        safety_text = ""
+        if trade.side == TradeSide.BUY:
+            try:
+                from src.telegram.safety import check_token_safety, format_safety_result
+                safety = await asyncio.wait_for(
+                    check_token_safety(token.address, chain_key),
+                    timeout=4,
+                )
+                if safety.get("checked") and safety.get("risk_level") in ("CRITICAL", "HIGH"):
+                    safety_text = "\n\n" + format_safety_result(safety, token.symbol or "")
+            except Exception:
+                pass
 
         if trade.side == TradeSide.BUY:
             text = format_buy_alert(
@@ -714,6 +817,8 @@ class SnipeBot:
                 is_new_position=(position.total_bought_quantity == classified.base_amount),
                 smart_money_score=score,
             )
+            if safety_text:
+                text += safety_text
         else:
             hold_secs = 0
             if position.first_buy_at:
