@@ -48,6 +48,7 @@ from src.telegram.alerts import (
     format_number,
 )
 from src.telegram.keyboards import (
+    alert_filters_keyboard,
     back_keyboard,
     cancel_keyboard,
     confirm_keyboard,
@@ -64,12 +65,17 @@ from src.telegram.menus import (
     handle_chain_toggle,
     set_state,
     show_add_wallet_prompt,
+    show_alert_filters_view,
     show_analytics,
     show_consensus,
+    show_discover,
     show_help,
+    show_hotlist,
     show_main_menu,
+    show_portfolio,
     show_ranking,
     show_settings,
+    show_trade_history_view,
     show_wallet_detail,
     show_wallets_menu,
 )
@@ -128,9 +134,12 @@ class SnipeBot:
         app.add_handler(CommandHandler("help", self._cmd_help))
         app.add_handler(CommandHandler("menu", self._cmd_start))
         app.add_handler(CommandHandler("track", self._cmd_track))
+        app.add_handler(CommandHandler("add", self._cmd_track))
         app.add_handler(CommandHandler("wallets", self._cmd_wallets))
         app.add_handler(CommandHandler("wallet", self._cmd_wallet))
         app.add_handler(CommandHandler("ranking", self._cmd_ranking))
+        app.add_handler(CommandHandler("portfolio", self._cmd_portfolio))
+        app.add_handler(CommandHandler("hotlist", self._cmd_hotlist))
         app.add_handler(CommandHandler("positions", self._cmd_positions))
         app.add_handler(CommandHandler("health", self._cmd_health))
         app.add_handler(CommandHandler("emergency", self._cmd_emergency))
@@ -281,6 +290,12 @@ class SnipeBot:
             )
         await update.message.reply_html("\n\n".join(lines), reply_markup=main_menu_keyboard())
 
+    async def _cmd_portfolio(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        await show_portfolio(self, update)
+
+    async def _cmd_hotlist(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        await show_hotlist(self, update)
+
     # ── Text message router ────────────────────────────
 
     async def _handle_text(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -322,6 +337,15 @@ class SnipeBot:
         elif data == "menu:help":
             await show_help(self, update, edit=True)
 
+        elif data == "menu:portfolio":
+            await show_portfolio(self, update, edit=True)
+
+        elif data == "menu:hotlist":
+            await show_hotlist(self, update, edit=True)
+
+        elif data == "menu:discover":
+            await show_discover(self, update, edit=True)
+
         # Wallet pagination
         elif data.startswith("wallets:page:"):
             page = int(data.split(":")[2])
@@ -339,6 +363,16 @@ class SnipeBot:
         elif data.startswith("wallet:trades:"):
             address = data.split(":", 2)[2]
             await self._show_wallet_trades(update, address)
+
+        elif data.startswith("wallet:history:"):
+            parts = data.split(":")
+            address = parts[2]
+            page = int(parts[3]) if len(parts) > 3 else 0
+            await show_trade_history_view(self, update, address, page=page, edit=True)
+
+        elif data.startswith("wallet:filters:"):
+            address = data.split(":", 2)[2]
+            await show_alert_filters_view(self, update, address, edit=True)
 
         elif data.startswith("wallet:positions:"):
             address = data.split(":", 2)[2]
@@ -429,6 +463,69 @@ class SnipeBot:
                 "\n\n".join(lines), parse_mode=ParseMode.HTML,
                 reply_markup=back_keyboard("menu:analytics"),
             )
+
+        elif data == "analytics:chain_activity":
+            from src.telegram.alerts import format_chain_activity
+            stats = await self._get_chain_activity_stats()
+            text = format_chain_activity(stats)
+            await query.edit_message_text(text, parse_mode=ParseMode.HTML, reply_markup=back_keyboard("menu:analytics"))
+
+        # Portfolio
+        elif data in ("portfolio:refresh", "portfolio:by_chain", "portfolio:top_gains", "portfolio:top_losses"):
+            await show_portfolio(self, update, edit=True)
+
+        # Hotlist
+        elif data == "hotlist:refresh":
+            await show_hotlist(self, update, edit=True)
+
+        elif data.startswith("hotlist:page:"):
+            page = int(data.split(":")[2])
+            await show_hotlist(self, update, page=page, edit=True)
+
+        elif data.startswith("hotlist:chain:"):
+            chain = data.split(":")[2]
+            await show_hotlist(self, update, chain_filter=chain, edit=True)
+
+        # Discover
+        elif data.startswith("discover:"):
+            await show_discover(self, update, edit=True)
+
+        # Alert filters
+        elif data.startswith("filter:min_usd:"):
+            address = data.split(":", 2)[2]
+            await set_state(self, chat_id, menus.STATE_AWAITING_FILTER_USD, {"wallet_address": address})
+            await query.edit_message_text(
+                f"💵 Entre le montant minimum en USD pour les alertes de ce wallet:\n<i>Ex: 1000</i>",
+                parse_mode=ParseMode.HTML,
+                reply_markup=cancel_keyboard(),
+            )
+
+        elif data.startswith("filter:min_score:"):
+            address = data.split(":", 2)[2]
+            await set_state(self, chat_id, menus.STATE_AWAITING_FILTER_SCORE, {"wallet_address": address})
+            await query.edit_message_text(
+                f"🏆 Entre le score minimum Smart Money (0-100):\n<i>Ex: 70</i>",
+                parse_mode=ParseMode.HTML,
+                reply_markup=cancel_keyboard(),
+            )
+
+        elif data.startswith("filter:mute:"):
+            address = data.split(":", 2)[2]
+            muted_key = f"tg:alerts_muted:{chat_id}:{address}"
+            await self._redis.setex(muted_key, 86400 * 30, "1")
+            await show_alert_filters_view(self, update, address, edit=True)
+
+        elif data.startswith("filter:unmute:"):
+            address = data.split(":", 2)[2]
+            muted_key = f"tg:alerts_muted:{chat_id}:{address}"
+            await self._redis.delete(muted_key)
+            await show_alert_filters_view(self, update, address, edit=True)
+
+        elif data.startswith("filter:reset:"):
+            address = data.split(":", 2)[2]
+            filters_key = f"tg:wallet_filters:{chat_id}:{address}"
+            await self._redis.delete(filters_key)
+            await show_alert_filters_view(self, update, address, edit=True)
 
         # Settings
         elif data == "settings:toggle_alerts":
@@ -953,6 +1050,73 @@ class SnipeBot:
         data = json.loads(raw) if raw else {}
         data[key] = value
         await self._redis.setex(_user_settings_key(chat_id), 86400 * 90, json.dumps(data))
+
+    async def get_trade_history(
+        self,
+        wallet_address: str,
+        limit: int = 10,
+        offset: int = 0,
+    ) -> list[dict]:
+        try:
+            async with AsyncSessionLocal() as session:
+                from src.database.repositories.wallet_repo import WalletRepository
+                from src.database.repositories.trade_repo import TradeRepository
+                repo = WalletRepository(session)
+                wallet = await repo.get_by_address(wallet_address)
+                if not wallet:
+                    return []
+                trade_repo = TradeRepository(session)
+                trades = await trade_repo.get_by_wallet(wallet.id, limit=limit, offset=offset)
+                return [
+                    {
+                        "side": t.side.value if t.side else "BUY",
+                        "token_symbol": t.token_symbol or "???",
+                        "chain": getattr(t, "chain_key", ""),
+                        "roi_percent": t.roi_percent,
+                        "value_usd": t.value_usd or 0,
+                        "timestamp": t.created_at,
+                    }
+                    for t in trades
+                ]
+        except Exception:
+            return []
+
+    async def count_trades(self, wallet_address: str) -> int:
+        try:
+            async with AsyncSessionLocal() as session:
+                from src.database.repositories.wallet_repo import WalletRepository
+                from sqlalchemy import func
+                repo = WalletRepository(session)
+                wallet = await repo.get_by_address(wallet_address)
+                if not wallet:
+                    return 0
+                result = await session.execute(
+                    select(func.count(Trade.id)).where(Trade.wallet_id == wallet.id)
+                )
+                return result.scalar() or 0
+        except Exception:
+            return 0
+
+    async def _get_chain_activity_stats(self) -> dict:
+        try:
+            async with AsyncSessionLocal() as session:
+                from sqlalchemy import func
+                result = await session.execute(
+                    select(Trade.chain_key, func.count(Trade.id), func.sum(Trade.value_usd))
+                    .group_by(Trade.chain_key)
+                    .order_by(func.count(Trade.id).desc())
+                    .limit(20)
+                )
+                rows = result.all()
+                return {
+                    row[0] or "unknown": {
+                        "tx_count": row[1] or 0,
+                        "volume_usd": float(row[2] or 0),
+                    }
+                    for row in rows
+                }
+        except Exception:
+            return {}
 
     def set_wallet_manager(self, wm) -> None:
         self._wallet_manager = wm

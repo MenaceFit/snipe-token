@@ -68,6 +68,23 @@ async def _build_chain_adapters(wallet_manager: WalletManager) -> None:
         ("fraxtal",       252,        "fraxtal_rpc_ws",      "fraxtal_rpc_http",      None),
         ("polygon_zkevm", 1101,       "polygon_zkevm_rpc_ws","polygon_zkevm_rpc_http",None),
         ("klaytn",        8217,       "klaytn_rpc_ws",       "klaytn_rpc_http",       None),
+        # Tier 3 — extended coverage
+        ("moonriver",     1285,       "moonriver_rpc_ws",    "moonriver_rpc_http",    None),
+        ("canto",         7700,       "canto_rpc_ws",        "canto_rpc_http",        None),
+        ("evmos",         9001,       "evmos_rpc_ws",        "evmos_rpc_http",        None),
+        ("conflux",       1030,       "conflux_rpc_ws",      "conflux_rpc_http",      None),
+        ("xlayer",        196,        "xlayer_rpc_ws",       "xlayer_rpc_http",       None),
+        ("zetachain",     7000,       "zetachain_rpc_ws",    "zetachain_rpc_http",    None),
+        ("merlin",        4200,       "merlin_rpc_ws",       "merlin_rpc_http",       None),
+        ("bob",           60808,      "bob_rpc_ws",          "bob_rpc_http",          None),
+        ("cyber",         7560,       "cyber_rpc_ws",        "cyber_rpc_http",        None),
+        ("degen",         666666666,  "degen_rpc_ws",        "degen_rpc_http",        None),
+        ("gravity",       1625,       "gravity_rpc_ws",      "gravity_rpc_http",      None),
+        ("viction",       88,         "viction_rpc_ws",      "viction_rpc_http",      None),
+        ("harmony",       1666600000, "harmony_rpc_ws",      "harmony_rpc_http",      None),
+        ("velas",         106,        "velas_rpc_ws",        "velas_rpc_http",        None),
+        ("oasis_sapphire",23294,      "oasis_sapphire_rpc_ws","oasis_sapphire_rpc_http",None),
+        ("neon",          245022934,  "neon_rpc_ws",         "neon_rpc_http",         None),
     ]
 
     for chain_key, chain_id, ws_attr, http_attr, ws_backup_attr in evm_chains:

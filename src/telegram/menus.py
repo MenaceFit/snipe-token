@@ -14,19 +14,28 @@ from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 
 from src.telegram.alerts import (
-    format_ranking,
-    format_wallet_stats,
+    format_chain_activity,
+    format_hotlist,
     format_number,
+    format_portfolio_summary,
+    format_ranking,
+    format_trade_history,
+    format_wallet_stats,
 )
 from src.telegram.keyboards import (
+    alert_filters_keyboard,
     analytics_keyboard,
     back_keyboard,
     cancel_keyboard,
     chain_selection_keyboard,
     confirm_keyboard,
+    discover_keyboard,
+    hotlist_keyboard,
     main_menu_keyboard,
+    portfolio_keyboard,
     ranking_keyboard,
     settings_keyboard,
+    trade_history_keyboard,
     wallet_detail_keyboard,
     wallets_list_keyboard,
 )
@@ -42,6 +51,8 @@ STATE_AWAITING_ADDRESS = "awaiting_address"
 STATE_AWAITING_LABEL = "awaiting_label"
 STATE_AWAITING_MIN_TRADE = "awaiting_min_trade"
 STATE_AWAITING_MIN_SCORE = "awaiting_min_score"
+STATE_AWAITING_FILTER_USD = "awaiting_filter_usd"
+STATE_AWAITING_FILTER_SCORE = "awaiting_filter_score"
 
 # ─── Redis key helpers ─────────────────────────
 def _state_key(chat_id: int) -> str:
@@ -105,6 +116,12 @@ async def handle_text_message(
 
     elif state == STATE_AWAITING_MIN_SCORE:
         await _handle_min_score_input(bot, update, text)
+
+    elif state == STATE_AWAITING_FILTER_USD:
+        await _handle_filter_usd_input(bot, update, text)
+
+    elif state == STATE_AWAITING_FILTER_SCORE:
+        await _handle_filter_score_input(bot, update, text)
 
     else:
         # Default: treat as address if it looks like one
@@ -289,17 +306,17 @@ async def show_main_menu(
     text = (
         "🔍 <b>Snipe Token — Insider Detector</b>\n\n"
         f"👛 Wallets trackés: <b>{total}</b>\n"
-        "⛓️ Blockchains: <b>40+</b> (all DexScreener)\n\n"
-        "<i>Détecte les insiders et smart money en temps réel.</i>"
+        "⛓️ Blockchains: <b>55+</b> EVM (all DexScreener)\n\n"
+        "<i>Détection insider · Smart Money · Multi-chain</i>"
     )
     if edit and update.callback_query:
         await update.callback_query.edit_message_text(
-            text, parse_mode=ParseMode.HTML, reply_markup=main_menu_keyboard()
+            text, parse_mode=ParseMode.HTML, reply_markup=main_menu_keyboard(total)
         )
     else:
         msg = update.message or (update.callback_query and update.callback_query.message)
         if msg:
-            await msg.reply_html(text, reply_markup=main_menu_keyboard())
+            await msg.reply_html(text, reply_markup=main_menu_keyboard(total))
 
 
 async def show_wallets_menu(
@@ -465,6 +482,214 @@ async def show_wallet_detail(
             await msg.reply_html(text, reply_markup=kb)
 
 
+async def show_portfolio(
+    bot: "SnipeBot",
+    update: Update,
+    edit: bool = False,
+) -> None:
+    wallets = await bot.list_wallets()
+    text = format_portfolio_summary(wallets)
+    kb = portfolio_keyboard()
+    if edit and update.callback_query:
+        await update.callback_query.edit_message_text(text, parse_mode=ParseMode.HTML, reply_markup=kb)
+    else:
+        msg = update.message or (update.callback_query and update.callback_query.message)
+        if msg:
+            await msg.reply_html(text, reply_markup=kb)
+
+
+async def show_hotlist(
+    bot: "SnipeBot",
+    update: Update,
+    page: int = 0,
+    chain_filter: str = "all",
+    edit: bool = False,
+) -> None:
+    tokens = await bot.get_consensus_tokens()
+    if chain_filter and chain_filter != "all":
+        tokens = [t for t in tokens if t.get("chain", "") == chain_filter]
+    page_size = 12
+    total_pages = max(1, (len(tokens) + page_size - 1) // page_size)
+    page_tokens = tokens[page * page_size:(page + 1) * page_size]
+    text = format_hotlist(page_tokens)
+    kb = hotlist_keyboard(page=page, total_pages=total_pages)
+    if edit and update.callback_query:
+        await update.callback_query.edit_message_text(text, parse_mode=ParseMode.HTML, reply_markup=kb)
+    else:
+        msg = update.message or (update.callback_query and update.callback_query.message)
+        if msg:
+            await msg.reply_html(text, reply_markup=kb)
+
+
+async def show_discover(
+    bot: "SnipeBot",
+    update: Update,
+    edit: bool = False,
+) -> None:
+    text = (
+        "🔭 <b>Découvrir des Smart Money</b>\n\n"
+        "Trouve de nouveaux wallets insiders pas encore trackés.\n\n"
+        "🔍 Analyse les wallets qui performent le mieux\n"
+        "📊 Basé sur les transactions récentes\n"
+        "🏆 Scorés automatiquement\n\n"
+        "<i>Sélectionne un mode de découverte :</i>"
+    )
+    kb = discover_keyboard()
+    if edit and update.callback_query:
+        await update.callback_query.edit_message_text(text, parse_mode=ParseMode.HTML, reply_markup=kb)
+    else:
+        msg = update.message or (update.callback_query and update.callback_query.message)
+        if msg:
+            await msg.reply_html(text, reply_markup=kb)
+
+
+async def show_trade_history_view(
+    bot: "SnipeBot",
+    update: Update,
+    wallet_address: str,
+    page: int = 0,
+    edit: bool = False,
+) -> None:
+    page_size = 10
+    trades = await bot.get_trade_history(wallet_address, limit=page_size, offset=page * page_size)
+    total_count = await bot.count_trades(wallet_address)
+    total_pages = max(1, (total_count + page_size - 1) // page_size)
+
+    data = await bot.get_wallet_data(wallet_address)
+    label = (data or {}).get("label") or wallet_address[:12]
+
+    text = format_trade_history(trades, label, page=page, total_pages=total_pages)
+    kb = trade_history_keyboard(
+        wallet_id=wallet_address,
+        page=page,
+        has_prev=page > 0,
+        has_next=(page + 1) < total_pages,
+    )
+    if edit and update.callback_query:
+        await update.callback_query.edit_message_text(text, parse_mode=ParseMode.HTML, reply_markup=kb)
+    else:
+        msg = update.message or (update.callback_query and update.callback_query.message)
+        if msg:
+            await msg.reply_html(text, reply_markup=kb)
+
+
+async def show_alert_filters_view(
+    bot: "SnipeBot",
+    update: Update,
+    wallet_address: str,
+    edit: bool = False,
+) -> None:
+    filters_key = f"tg:wallet_filters:{update.effective_chat.id}:{wallet_address}"
+    raw = await bot._redis.get(filters_key)
+    filters_data: dict = {}
+    if raw:
+        import json
+        try:
+            filters_data = json.loads(raw)
+        except Exception:
+            pass
+
+    min_usd = filters_data.get("min_usd", 0)
+    min_score = filters_data.get("min_score", 0)
+    muted_key = f"tg:alerts_muted:{update.effective_chat.id}:{wallet_address}"
+    is_muted = bool(await bot._redis.get(muted_key))
+
+    data = await bot.get_wallet_data(wallet_address)
+    label = (data or {}).get("label") or wallet_address[:12]
+
+    text = (
+        f"🔔 <b>Filtres d'alertes</b> — {label}\n\n"
+        f"💵 Montant minimum: <b>${min_usd:.0f}</b>\n"
+        f"🏆 Score minimum: <b>{min_score}/100</b>\n"
+        f"{'🔕 Alertes: MUTÉES' if is_muted else '🔔 Alertes: ACTIVES'}\n\n"
+        f"<i>Seules les alertes correspondant aux filtres seront envoyées.</i>"
+    )
+    kb = alert_filters_keyboard(
+        wallet_id=wallet_address,
+        min_usd=min_usd,
+        min_score=min_score,
+        is_muted=is_muted,
+    )
+    if edit and update.callback_query:
+        await update.callback_query.edit_message_text(text, parse_mode=ParseMode.HTML, reply_markup=kb)
+    else:
+        msg = update.message or (update.callback_query and update.callback_query.message)
+        if msg:
+            await msg.reply_html(text, reply_markup=kb)
+
+
+async def _handle_filter_usd_input(
+    bot: "SnipeBot",
+    update: Update,
+    text: str,
+) -> None:
+    import json
+    chat_id = update.effective_chat.id
+    data = await get_data(bot, chat_id)
+    wallet_address = data.get("wallet_address", "")
+    try:
+        value = float(text.replace("$", "").replace(",", ""))
+        if value < 0:
+            raise ValueError
+    except ValueError:
+        await update.message.reply_html(
+            "❌ Valeur invalide. Entre un montant en USD (ex: <b>500</b>)",
+            reply_markup=cancel_keyboard(),
+        )
+        return
+
+    filters_key = f"tg:wallet_filters:{chat_id}:{wallet_address}"
+    raw = await bot._redis.get(filters_key)
+    filters_data = json.loads(raw) if raw else {}
+    filters_data["min_usd"] = value
+    await bot._redis.setex(filters_key, 86400 * 30, json.dumps(filters_data))
+    await clear_state(bot, chat_id)
+    await update.message.reply_html(
+        f"✅ Filtre USD mis à jour: <b>${value:.0f}</b>",
+        reply_markup=alert_filters_keyboard(
+            wallet_id=wallet_address,
+            min_usd=value,
+            min_score=filters_data.get("min_score", 0),
+        ),
+    )
+
+
+async def _handle_filter_score_input(
+    bot: "SnipeBot",
+    update: Update,
+    text: str,
+) -> None:
+    import json
+    chat_id = update.effective_chat.id
+    data = await get_data(bot, chat_id)
+    wallet_address = data.get("wallet_address", "")
+    try:
+        value = int(text.strip())
+        if not 0 <= value <= 100:
+            raise ValueError
+    except ValueError:
+        await update.message.reply_html(
+            "❌ Valeur invalide. Entre un score entre <b>0 et 100</b>",
+            reply_markup=cancel_keyboard(),
+        )
+        return
+
+    filters_key = f"tg:wallet_filters:{chat_id}:{wallet_address}"
+    raw = await bot._redis.get(filters_key)
+    filters_data = json.loads(raw) if raw else {}
+    filters_data["min_score"] = value
+    await bot._redis.setex(filters_key, 86400 * 30, json.dumps(filters_data))
+    await clear_state(bot, chat_id)
+    await update.message.reply_html(
+        f"✅ Filtre score mis à jour: <b>{value}/100</b>",
+        reply_markup=alert_filters_keyboard(
+            wallet_id=wallet_address,
+            min_usd=filters_data.get("min_usd", 0),
+            min_score=value,
+        ),
+    )
+
+
 async def show_help(
     bot: "SnipeBot",
     update: Update,
@@ -475,22 +700,26 @@ async def show_help(
         "<b>Comment tracker un wallet :</b>\n"
         "1️⃣ Clique sur ➕ Tracker\n"
         "2️⃣ Colle l'adresse EVM\n"
-        "3️⃣ Le bot détecte les chains actives\n"
+        "3️⃣ Le bot détecte les chains actives (55+)\n"
         "4️⃣ Tu reçois les alertes BUY/SELL\n\n"
         "<b>Commandes :</b>\n"
         "/start — Menu principal\n"
-        "/track &lt;adresse&gt; — Tracker direct\n"
+        "/add &lt;adresse&gt; — Tracker direct\n"
         "/wallets — Mes wallets\n"
-        "/ranking — Classement\n"
+        "/portfolio — Vue portfolio\n"
+        "/hotlist — Tokens actifs (24h)\n"
+        "/ranking — Classement smart money\n"
         "/health — État du système\n"
-        "/emergency — Stop d'urgence\n\n"
+        "/emergency — Stop d'urgence (admin)\n\n"
         "<b>Alertes :</b>\n"
         "🟢 BUY — Achat détecté\n"
         "🔴 SELL — Vente détectée\n"
         "🚨 CONSENSUS — Plusieurs wallets ont acheté\n\n"
-        "<b>Smart Money Score :</b>\n"
-        "Score de 0 à 100 basé sur le win rate,\n"
-        "ROI moyen, régularité et gestion du risque."
+        "<b>Symboles :</b>\n"
+        "🐋 ≥$100K  🦈 ≥$25K  🐬 ≥$5K  🐟 ≥$1K  🦐 &lt;$1K\n"
+        "▓▓▓▓░░░░ Score / Progression\n\n"
+        "<b>Smart Money Score (0-100) :</b>\n"
+        "Win rate · ROI moyen · Régularité · Risque"
     )
     kb = back_keyboard("menu:main")
     if edit and update.callback_query:
