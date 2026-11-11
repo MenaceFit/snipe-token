@@ -161,43 +161,63 @@ def format_sell_alert(
     entry_price: Optional[float] = None,
     sell_price: Optional[float] = None,
     smart_money_score: Optional[float] = None,
+    wallet_total_trades: Optional[int] = None,
+    wallet_win_rate: Optional[float] = None,
 ) -> str:
-    roi_sign = "+" if roi_percent > 0 else ""
     roi_em = _roi_emoji(roi_percent)
+    pnl_sign = "+" if realized_pnl > 0 else ""
+    roi_sign = "+" if roi_percent > 0 else ""
+    size_emoji = _usd_scale_emoji(abs(realized_pnl))
 
     score_line = ""
     if smart_money_score is not None:
-        score_line = f"\n🏆 Score: {format_score_display(smart_money_score)}"
+        score_line = f"\n🏆 {format_score_display(smart_money_score)}"
 
-    size_emoji = _usd_scale_emoji(abs(proceeds_usd or 0))
+    exit_type = "🔚 SORTIE TOTALE" if remaining_pct <= 1 else f"🔻 VENTE PARTIELLE {pct_sold:.0f}%"
+
+    def _fmt_price(p: float) -> str:
+        if p < 0.000001: return f"${p:.10f}"
+        if p < 0.001:    return f"${p:.8f}"
+        if p < 0.01:     return f"${p:.6f}"
+        return f"${p:.4f}"
 
     parts = [
-        f"🔴 <b>VENTE</b> {pct_sold:.0f}% · <code>{chain_name.upper()}</code>",
-        f"",
+        f"🔴 <b>VENTE</b>  ·  <b>{chain_name.upper()}</b>",
+        f"━━━━━━━━━━━━━━━━━",
         f"👤 <b>{wallet_label}</b>{score_line}",
-        f"━━━━━━━━━━━━━━",
-        f"🪙 <b>${token_symbol}</b>",
+        f"",
+        f"🪙 <b>{token_symbol}</b>  ·  {exit_type}",
+        f"",
     ]
+
+    if entry_price and sell_price:
+        parts.append(f"📊 {_fmt_price(entry_price)} ➜ {_fmt_price(sell_price)}")
 
     if proceeds_usd is not None:
         parts.append(f"{size_emoji} Reçu: <b>${proceeds_usd:,.0f}</b>")
 
-    parts.append(
-        f"{roi_em} ROI: <b>{roi_sign}{roi_percent:.1f}%</b>  ·  PnL: <b>{format_usd(realized_pnl)}</b>"
-    )
-
-    if entry_price and sell_price:
-        ep = f"${entry_price:.6f}" if entry_price < 0.01 else f"${entry_price:.4f}"
-        sp = f"${sell_price:.6f}" if sell_price < 0.01 else f"${sell_price:.4f}"
-        bar = format_progress_bar(max(0.0, roi_percent), 200, 8)
-        parts.append(f"📊 {ep} → {sp}  {bar}")
-
+    pnl_color = "📈" if realized_pnl >= 0 else "📉"
     parts += [
-        f"⏱️ Tenu: <b>{format_hold_time(hold_time_seconds)}</b>  ·  Reste: <b>{remaining_pct:.0f}%</b>",
-        f"━━━━━━━━━━━━━━",
-        f"🔗 <code>{tx_hash[:20]}…{tx_hash[-6:]}</code>",
+        f"{pnl_color} P&L: <b>{pnl_sign}${abs(realized_pnl):,.0f}</b>",
+        f"{roi_em} ROI: <b>{roi_sign}{roi_percent:.1f}%</b>",
+        f"⏱️ Tenu: <b>{format_hold_time(hold_time_seconds)}</b>",
     ]
 
+    if remaining_pct > 1:
+        pct_bar = format_progress_bar(remaining_pct, 100, 8)
+        parts.append(f"📦 Reste: {pct_bar} <b>{remaining_pct:.0f}%</b>")
+
+    if wallet_total_trades is not None and wallet_win_rate is not None:
+        wr_bar = format_progress_bar(wallet_win_rate, 100, 6)
+        parts += [
+            f"",
+            f"📊 Stats wallet: {wallet_total_trades} trades · WR {wr_bar} <b>{wallet_win_rate:.1f}%</b>",
+        ]
+
+    parts += [
+        f"━━━━━━━━━━━━━━━━━",
+        f"<code>{tx_hash[:10]}…{tx_hash[-6:]}</code>",
+    ]
     return "\n".join(parts)
 
 

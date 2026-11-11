@@ -149,7 +149,12 @@ async def main() -> None:
         metrics.start_server(port=settings.prometheus_port)
 
     # Redis
-    redis = aioredis.from_url(settings.redis_url, decode_responses=False)
+    if settings.use_fakeredis:
+        import fakeredis.aioredis as fakeredis_aioredis
+        redis = fakeredis_aioredis.FakeRedis(decode_responses=False)
+        logger.info("Using in-memory fakeredis (no Redis server needed)")
+    else:
+        redis = aioredis.from_url(settings.redis_url, decode_responses=False)
 
     # Core services
     price_engine = PriceEngine()

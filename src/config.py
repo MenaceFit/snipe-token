@@ -19,12 +19,13 @@ class Settings(BaseSettings):
     telegram_chat_ids: str = ""
     telegram_admin_ids: str = ""
 
-    # Database
-    database_url: str = "postgresql+asyncpg://snipe:snipe@localhost:5432/snipe_token"
-    database_sync_url: str = "postgresql://snipe:snipe@localhost:5432/snipe_token"
+    # Database (defaults to SQLite — no server needed)
+    database_url: str = "sqlite+aiosqlite:///snipe_token.db"
+    database_sync_url: str = "sqlite:///snipe_token.db"
 
     # Redis
-    redis_url: str = "redis://localhost:6379/0"
+    redis_url: str = "redis://localhost:6379/0"  # ignored when use_fakeredis=True
+    use_fakeredis: bool = True  # set to False to use a real Redis server
 
     # EVM RPCs
     eth_rpc_ws: str = ""

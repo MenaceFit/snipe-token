@@ -15,12 +15,17 @@ anchorpy==0.20.1
 
 # Database
 sqlalchemy[asyncio]==2.0.36
-asyncpg==0.29.0
+# asyncpg==0.29.0  # replaced by aiosqlite for zero-server local usage
+aiosqlite==0.20.0
 alembic==1.13.3
-psycopg2-binary==2.9.9
+# psycopg2-binary==2.9.9  # only needed if using PostgreSQL
 
 # Redis
 redis[hiredis]==5.0.8
+fakeredis==2.26.1
+
+# Packaging
+pyinstaller==6.11.1
 
 # Telegram
 python-telegram-bot[webhooks]==21.6

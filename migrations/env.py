@@ -16,11 +16,10 @@ config = context.config
 if config.config_file_name:
     fileConfig(config.config_file_name)
 
-# Override DB URL from env if set
-db_url = os.environ.get("DATABASE_SYNC_URL") or os.environ.get("DATABASE_URL", "").replace(
-    "+asyncpg", ""
-)
+# Override DB URL from env if set; strip async driver prefixes for sync usage
+db_url = os.environ.get("DATABASE_SYNC_URL") or os.environ.get("DATABASE_URL", "")
 if db_url:
+    db_url = db_url.replace("+asyncpg", "").replace("+aiosqlite", "")
     config.set_main_option("sqlalchemy.url", db_url)
 
 target_metadata = Base.metadata
@@ -56,7 +55,15 @@ async def run_async_migrations() -> None:
 
 
 def run_migrations_online() -> None:
-    asyncio.run(run_async_migrations())
+    url = config.get_main_option("sqlalchemy.url", "")
+    if url.startswith("sqlite"):
+        # SQLite: use sync engine directly
+        from sqlalchemy import create_engine
+        connectable = create_engine(url, poolclass=pool.NullPool)
+        with connectable.connect() as connection:
+            do_run_migrations(connection)
+    else:
+        asyncio.run(run_async_migrations())
 
 
 if context.is_offline_mode():
