@@ -75,17 +75,45 @@ def check_env() -> None:
 
 
 def check_deps() -> None:
-    missing = []
-    for pkg in ["telegram", "aiohttp", "sqlalchemy", "fakeredis", "aiosqlite", "rich"]:
-        try:
-            __import__(pkg)
-        except ImportError:
-            missing.append(pkg)
+    """Check all critical packages; install from requirements.txt if any are missing."""
+    CRITICAL = [
+        ("telegram",          "python-telegram-bot"),
+        ("aiohttp",           "aiohttp"),
+        ("sqlalchemy",        "SQLAlchemy"),
+        ("fakeredis",         "fakeredis"),
+        ("aiosqlite",         "aiosqlite"),
+        ("rich",              "rich"),
+        ("pydantic_settings", "pydantic-settings"),
+        ("dotenv",            "python-dotenv"),
+        ("uvicorn",           "uvicorn"),
+        ("redis",             "redis"),
+        ("alembic",           "alembic"),
+    ]
+    missing = [name for pkg, name in CRITICAL if not _can_import(pkg)]
     if missing:
         _print(f"⚠️  Packages manquants: {', '.join(missing)}", "yellow")
-        _print("📦 Installation en cours...", "cyan")
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", str(ROOT / "requirements.txt")])
-        _print("✅ Installation terminée !", "green")
+        _print("📦 Installation en cours (peut prendre quelques minutes)...", "cyan")
+        try:
+            subprocess.check_call(
+                [sys.executable, "-m", "pip", "install", "-r", str(ROOT / "requirements.txt")]
+            )
+            _print("✅ Installation terminée !", "green")
+        except subprocess.CalledProcessError as e:
+            _print(f"❌ Erreur pip install: {e}", "red bold")
+            _print("   Lance manuellement: pip install -r requirements.txt", "dim")
+            sys.exit(1)
+        import importlib
+        importlib.invalidate_caches()
+    else:
+        _print("✅ Dépendances OK.", "dim")
+
+
+def _can_import(pkg: str) -> bool:
+    try:
+        __import__(pkg)
+        return True
+    except ImportError:
+        return False
 
 
 async def run_migrations() -> None:
@@ -111,8 +139,8 @@ async def run_bot() -> None:
 async def main() -> None:
     _banner()
 
+    check_deps()   # installe les deps AVANT check_env (qui a besoin de dotenv)
     check_env()
-    check_deps()
     await run_migrations()
 
     _print("🚀 Démarrage du bot...", "bold cyan")
