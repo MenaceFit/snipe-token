@@ -12,7 +12,10 @@ from typing import Any, Callable, Optional
 import aiohttp
 from tenacity import retry, stop_after_attempt, wait_exponential
 from web3 import AsyncHTTPProvider, AsyncWeb3
-from web3.middleware import async_geth_poa_middleware
+try:
+    from web3.middleware import ExtraDataToPOAMiddleware as _poa_mw  # web3 7.x
+except ImportError:
+    from web3.middleware import async_geth_poa_middleware as _poa_mw  # web3 6.x fallback
 
 from src.chains.base_adapter import (
     ChainAdapter,
@@ -87,7 +90,7 @@ class EVMAdapter(ChainAdapter):
     async def start(self) -> None:
         self._w3 = AsyncWeb3(AsyncHTTPProvider(self._rpc_http))
         if self._poa:
-            self._w3.middleware_onion.inject(async_geth_poa_middleware, layer=0)
+            self._w3.middleware_onion.inject(_poa_mw, layer=0)
         if self._rpc_http_backup:
             self._w3_backup = AsyncWeb3(AsyncHTTPProvider(self._rpc_http_backup))
         self._running = True
@@ -209,7 +212,7 @@ class EVMAdapter(ChainAdapter):
         # Try reconnect primary
         self._w3 = AsyncWeb3(AsyncHTTPProvider(self._rpc_http))
         if self._poa:
-            self._w3.middleware_onion.inject(async_geth_poa_middleware, layer=0)
+            self._w3.middleware_onion.inject(_poa_mw, layer=0)
         return self._w3
 
     async def _check_w3(self, w3: AsyncWeb3) -> bool:

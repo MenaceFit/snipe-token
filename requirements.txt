@@ -1,11 +1,11 @@
 # Core async
-aiohttp==3.9.5
+aiohttp>=3.10.5
 aiofiles==23.2.1
 
 # Web3 / Blockchain (eth-account version managed by web3)
-web3==6.20.1
-eth-abi==5.1.0
-eth-utils==4.1.1
+web3>=7.0.0,<8
+eth-abi>=5.1.0
+eth-utils>=4.1.1
 
 # Database
 sqlalchemy[asyncio]==2.0.36
